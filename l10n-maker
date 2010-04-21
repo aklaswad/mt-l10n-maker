@@ -166,42 +166,25 @@ sub run {
     for my $val ( values %$existing_lexicon ) {
         $val = Encode::decode_utf8($val) if !Encode::is_utf8($val);
     }
-    require MT::FileMgr;
-    my $fmgr = MT::FileMgr->new('Local');
     my @out;
     my ( $new );
     my %used_phrase;
     for my $target ( @targets ) {
-        my ($suffix) = $target =~ /\.(\w+)$/ or next;
-        my $mode = $mode_for_filetype{ $suffix } or next;
-        warn "fetch phrases from $target" if $verbose;
-        my $text = $fmgr->get_data($target, 'upload');
-        $text = Encode::decode_utf8($text);
-        my %phrase = $rule_for_mode{$mode}->($text) or next;
-        my @phrases = keys %phrase;
-        @phrases = sort { $a cmp $b } @phrases;
-        my $target_rel = File::Spec->abs2rel($target, $cwd);
-        my @this_out;
-        for my $phrase ( @phrases ) {
-            my $out = make_line(
-                          $phrase,
+        my @this_out = make_lexicon_from_file(
+                          $target,
                           core_lexicon     => $core_lexicon,
                           existing_lexicon => $existing_lexicon,
                           used_phrase      => \%used_phrase,
-                          ignore_existing  => $newonly,
-                      );
-            if ( $out ) {
-                $new++ if $out =~ /Translate - New$/;
-                push @this_out, $out;
-            }
-        }
-        my $titled = 0;
+                       );
         if ( scalar @this_out ) {
+            my $target_rel = File::Spec->abs2rel($target, $cwd);
+            $new += scalar grep { $_ =~ /Translate - New$/ } @this_out;
             push @out, ( '' );
             push @out, "## $target_rel" if $footprint;
             push @out, @this_out;
         }
     }
+
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
     if ( scalar @unused_phrases && $include_unused ) {
         push @out, ( '' );
@@ -226,6 +209,39 @@ sub run {
     printf STDERR "got %i new phrease to translate!\n", $new;
     printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
     if ( $verbose ) { print STDERR "UNUSED: $_\n" for @unused_phrases };
+}
+
+
+sub make_lexicon_from_file {
+    my ( $filepath, %opts ) = @_;
+    my $core_lexicon     = $opts{core_lexicon} || {};
+    my $existing_lexicon = $opts{existing_lexicon} || {};
+    my $used_phrase      = $opts{used_phrase} || {};
+    my ($suffix) = $filepath =~ /\.(\w+)$/ or return;
+    my $mode = $mode_for_filetype{ $suffix } or return;
+    warn "fetch phrases from $filepath" if $verbose;
+
+    require MT::FileMgr;
+    my $fmgr = MT::FileMgr->new('Local');
+    my $text = $fmgr->get_data($filepath, 'upload');
+    $text = Encode::decode_utf8($text);
+    my %phrase = $rule_for_mode{$mode}->($text) or return;
+    my @phrases = keys %phrase;
+    @phrases = sort { $a cmp $b } @phrases;
+    my @this_out;
+    for my $phrase ( @phrases ) {
+        my $out = make_line(
+                      $phrase,
+                      core_lexicon     => $core_lexicon,
+                      existing_lexicon => $existing_lexicon,
+                      used_phrase      => $used_phrase,
+                      ignore_existing  => $newonly,
+                  );
+        if ( $out ) {
+            push @this_out, $out;
+        }
+    }
+    @this_out;
 }
 
 sub make_line {
