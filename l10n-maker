@@ -11,7 +11,7 @@ use vars qw( $MT_HOME );
 use vars qw(
     $verbose  $help       $component      $output
     $language $translated $stealcore      $format
-    $newonly  $footprint  $include_unused
+    $newonly  $footprint  $include_unused $debug
 );
 
 $footprint = 1;
@@ -28,6 +28,7 @@ GetOptions(
     'newonly|n'    => \$newonly,
     'footprint!'   => \$footprint,
     includeunused  => \$include_unused,
+    debug          => \$debug,
 );
 
 if ( $help ) {
@@ -40,7 +41,11 @@ if ( $help ) {
 
 ## Initialize MT
 my $cwd = cwd();
-$MT_HOME = $ENV{MT_HOME} || $cwd;
+$MT_HOME = $ENV{MT_HOME} ||= $cwd;
+
+print STDERR "    CWD: $cwd\n" if $debug;
+print STDERR "MT_HOME: $MT_HOME\n" if $debug;
+
 unshift @INC, File::Spec->catdir( $MT_HOME, 'lib' );
 unshift @INC, File::Spec->catdir( $MT_HOME, 'extlib' );
 
@@ -70,6 +75,9 @@ sub run {
                     : $component   ? component_targets($component)
                     :                ($cwd)
                     ;
+    if ( $debug ) {
+        printf STDERR "Search path: %s\n", $_ for @target_dirs;
+    }
     my %other_component_path;
     if ( $component ) {
         require MT::Component;
@@ -274,14 +282,15 @@ sub component_targets {
     my ($component_id) = @_;
     my $component = MT->component($component_id)
         or die "Failed to load component $component_id";
+    my $path = $component->path;
+    print STDERR "path $path";
     if ( $component_id eq 'core' ) {
-        my $path = $component->path;
         my @dirs = qw( lib tmpl php search_templates default_templates );
         return map { File::Spec->catdir( $path, $_ ) } @dirs;
     }
     else {
         return (
-            $component->path,
+            $path,
             File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component->id ),
         );
     }
