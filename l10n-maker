@@ -6,6 +6,7 @@ use File::Spec;
 use File::Find;
 use Getopt::Long;
 use Pod::Usage;
+use Encode;
 use vars qw( $MT_HOME );
 use vars qw(
     $verbose  $help       $component      $output
@@ -154,7 +155,9 @@ sub run {
             warn "l10n file is not yet exists" if $verbose;
         }
     }
-
+    for my $val ( values %$existing_lexicon ) {
+        $val = Encode::decode_utf8($val) if !Encode::is_utf8($val);
+    }
     require MT::FileMgr;
     my $fmgr = MT::FileMgr->new('Local');
     my @out;
@@ -165,6 +168,7 @@ sub run {
         my $mode = $mode_for_filetype{ $suffix } or next;
         warn "fetch phrases from $target" if $verbose;
         my $text = $fmgr->get_data($target, 'upload');
+        $text = Encode::decode_utf8($text);
         my %phrase = $rule_for_mode{$mode}->($text) or next;
         my @phrases = keys %phrase;
         @phrases = sort { $a cmp $b } @phrases;
@@ -206,10 +210,10 @@ sub run {
     if ( $output ) {
         require MT::FileMgr;
         my $fmgr = MT::FileMgr->new('Local');
-        $fmgr->put_data($res, $output, 'upload');
+        $fmgr->put_data($res, $output, 'output');
     }
     else {
-        print $res;
+        print Encode::encode_utf8($res);
     }
     printf STDERR "got %i new phrease to translate!\n", $new;
     printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
@@ -261,7 +265,6 @@ sub make_line {
     else {
         $reason = "New";
     }
-
     my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
     $out .= " # Translate - $reason" if $reason;
     $out;
