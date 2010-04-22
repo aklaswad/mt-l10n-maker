@@ -65,7 +65,14 @@ sub run {
                     : $component   ? component_targets($component)
                     :                ($cwd)
                     ;
-    my @targets = target_files(@target_dirs);
+    my %other_component_path;
+    if ( $component ) {
+        %other_component_path
+            = map { $_->path => 1 }
+              grep { $_->id ne $component }
+              values %MT::Components
+    }
+    my @targets = target_files( \@target_dirs, \%other_component_path );
     @targets = sort { $a cmp $b } @targets;
 
     my $existing_lexicon = {};
@@ -228,15 +235,20 @@ sub component_targets {
 }
 
 sub target_files {
-    my ($rootdir) = @_;
+    my ( $rootdirs, $ignore_path_hash ) = @_;
     my @files;
     my $files;
+use YAML;    print STDERR YAML::Dump $ignore_path_hash;
     find(
         sub {
-            push @files, $File::Find::name;
             die 'Too many files. May be you run script in bad directory '
                 if 100000 < $files++;
-        }, $rootdir);
+            my $name = $File::Find::name;
+            for my $key ( keys %$ignore_path_hash ) {
+                return if $name =~ /$key/;
+            }
+            push @files, $name;
+        }, @$rootdirs);
     @files = grep { $_ !~ /\.svn/ } @files;
     return @files;
 }
