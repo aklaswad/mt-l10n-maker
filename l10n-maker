@@ -10,8 +10,10 @@ use vars qw( $MT_HOME );
 use vars qw(
     $verbose  $help       $component $output
     $language $translated $stealcore $format
-    $newonly
+    $newonly  $footprint
 );
+
+$footprint = 1;
 
 GetOptions(
     help           => \$help,
@@ -23,6 +25,7 @@ GetOptions(
     'stealcore'    => \$stealcore,
     'format:s'     => \$format,
     'newonly'      => \$newonly,
+    'footprint!'   => \$footprint,
 );
 
 if ( $help ) {
@@ -70,7 +73,7 @@ sub run {
         %other_component_path
             = map { $_->path => 1 }
               grep { $_->id ne $component }
-              values %MT::Components
+              values %MT::Components;
     }
     my @targets = target_files( \@target_dirs, \%other_component_path );
     @targets = sort { $a cmp $b } @targets;
@@ -158,6 +161,7 @@ sub run {
     for my $target ( @targets ) {
         my ($suffix) = $target =~ /\.(\w+)$/ or next;
         my $mode = $mode_for_filetype{ $suffix } or next;
+        warn "fetch phrases from $target" if $verbose;
         my $text = $fmgr->get_data($target, 'upload');
         my %phrase = $rule_for_mode{$mode}->($text) or next;
         my @phrases = keys %phrase;
@@ -165,8 +169,13 @@ sub run {
         my $target_rel = File::Spec->abs2rel($target, $cwd);
         my @this_out;
         PHRASE: for my $phrase ( @phrases ) {
+            $phrase =~ s/([^\\]?)'/$1\\'/g;
+            $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
+            $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
+            $phrase =~ s/\\?\\'/'/g;
             next if $used_phrase{$phrase};
             $used_phrase{$phrase} = 1;
+
             my $trans = '';
             my ($qp, $qt) = qw( ' ' );
             if ($phrase =~ /\\n/) {
@@ -177,13 +186,15 @@ sub run {
             }
 
             my $reason;
-            if ( exists $core_lexicon->{$phrase}
-                 && !$stealcore
-                 && $component ne 'core' ) {
+            if ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
                  warn "Found same phrase in core. skiped: $phrase" if $verbose;
-                 next PHRASE;
+                 if ( !$stealcore ) {
+                     next PHRASE;
+                 }
+                 $trans = $core_lexicon->{$phrase};
+                 $reason = "From Core";
             }
-            if ( exists $existing_lexicon->{$phrase} ) {
+            if ( !$trans && exists $existing_lexicon->{$phrase} ) {
                 next PHRASE if $newonly;
                 $trans = $existing_lexicon->{$phrase};
                 if ($trans =~ /\\n/) {
@@ -197,10 +208,6 @@ sub run {
                 $reason = "New";
                 $new++;
             }
-            $phrase =~ s/([^\\]?)'/$1\\'/g;
-            $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
-            $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
-            $phrase =~ s/\\?\\'/'/g;
 
             my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
             $out .= " # Translate - $reason" if $reason;
@@ -208,7 +215,9 @@ sub run {
         }
         my $titled = 0;
         if ( scalar @this_out ) {
-            push @out, ( '', "## $target_rel", @this_out );
+            push @out, ( '' );
+            push @out, "## $target_rel" if $footprint;
+            push @out, @this_out;
         }
     }
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
@@ -228,11 +237,19 @@ sub run {
 
 sub component_targets {
     my ($component_id) = @_;
-    my $component = MT->component($component_id);
-    return (
-        $component->path,
-        File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component->id ),
-    );
+    my $component = MT->component($component_id)
+        or die "Failed to load component $component_id";
+    if ( $component_id eq 'core' ) {
+        my $path = $component->path;
+        my @dirs = qw( lib tmpl php search_templates default_templates );
+        return map { File::Spec->catdir( $path, $_ ) } @dirs;
+    }
+    else {
+        return (
+            $component->path,
+            File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component->id ),
+        );
+    }
 }
 
 sub target_files {
@@ -247,6 +264,7 @@ sub target_files {
             for my $key ( keys %$ignore_path_hash ) {
                 return if $name =~ /$key/;
             }
+            return if $name =~ /L10N\/\w*\.pm/;
             push @files, $name;
         }, @$rootdirs);
     @files = grep { $_ !~ /\.svn/ } @files;
