@@ -165,6 +165,7 @@ sub run {
         my $target_rel = File::Spec->abs2rel($target, $cwd);
         my @this_out;
         PHRASE: for my $phrase ( @phrases ) {
+            next if $used_phrase{$phrase};
             $used_phrase{$phrase} = 1;
             my $trans = '';
             my ($qp, $qt) = qw( ' ' );
