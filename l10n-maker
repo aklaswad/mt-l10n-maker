@@ -8,9 +8,9 @@ use Getopt::Long;
 use Pod::Usage;
 use vars qw( $MT_HOME );
 use vars qw(
-    $verbose  $help       $component $output
-    $language $translated $stealcore $format
-    $newonly  $footprint
+    $verbose  $help       $component      $output
+    $language $translated $stealcore      $format
+    $newonly  $footprint  $include_unused
 );
 
 $footprint = 1;
@@ -26,6 +26,7 @@ GetOptions(
     'format:s'     => \$format,
     'newonly|n'    => \$newonly,
     'footprint!'   => \$footprint,
+    includeunused  => \$include_unused,
 );
 
 if ( $help ) {
@@ -169,50 +170,18 @@ sub run {
         @phrases = sort { $a cmp $b } @phrases;
         my $target_rel = File::Spec->abs2rel($target, $cwd);
         my @this_out;
-        PHRASE: for my $phrase ( @phrases ) {
-            $phrase =~ s/([^\\]?)'/$1\\'/g;
-            $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
-            $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
-            $phrase =~ s/\\?\\'/'/g;
-            next if $used_phrase{$phrase};
-            $used_phrase{$phrase} = 1;
-
-            my $trans = '';
-            my ($qp, $qt) = qw( ' ' );
-            if ($phrase =~ /\\n/) {
-               $qp = '"';
+        for my $phrase ( @phrases ) {
+            my $out = make_line(
+                          $phrase,
+                          core_lexicon     => $core_lexicon,
+                          existing_lexicon => $existing_lexicon,
+                          used_phrase      => \%used_phrase,
+                          ignore_existing  => $newonly,
+                      );
+            if ( $out ) {
+                $new++ if $out =~ /Translate - New$/;
+                push @this_out, $out;
             }
-            if ($phrase =~ /[^\\]'/) {
-               $qp = '"';
-            }
-
-            my $reason;
-            if ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
-                 warn "Found same phrase in core. skiped: $phrase" if $verbose;
-                 if ( !$stealcore ) {
-                     next PHRASE;
-                 }
-                 $trans = $core_lexicon->{$phrase};
-                 $reason = "From Core";
-            }
-            if ( !$trans && exists $existing_lexicon->{$phrase} ) {
-                next PHRASE if $newonly;
-                $trans = $existing_lexicon->{$phrase};
-                if ($trans =~ /\\n/) {
-                    $qt = '"';
-                }
-                if ($trans =~ /[^\\]'/) {
-                    $qt = '"';
-                }
-            }
-            else {
-                $reason = "New";
-                $new++;
-            }
-
-            my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
-            $out .= " # Translate - $reason" if $reason;
-            push @this_out, $out;
         }
         my $titled = 0;
         if ( scalar @this_out ) {
@@ -222,6 +191,17 @@ sub run {
         }
     }
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
+    if ( scalar @unused_phrases && $include_unused ) {
+        push @out, ( '' );
+        push @out, "## Unused?";
+        for my $phrase ( @unused_phrases ) {
+            my $out = make_line(
+                          $phrase,
+                          existing_lexicon => $existing_lexicon,
+                          ignore_existing  => 0 );
+            push @out, $out if $out;
+        }
+    }
     my $res = join "\n", @out;
     if ( $output ) {
         require MT::FileMgr;
@@ -234,6 +214,57 @@ sub run {
     printf STDERR "got %i new phrease to translate!\n", $new;
     printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
     if ( $verbose ) { print STDERR "UNUSED: $_\n" for @unused_phrases };
+}
+
+sub make_line {
+    my ( $phrase, %opts ) = @_;
+    my $core_lexicon     = $opts{core_lexicon} || {};
+    my $existing_lexicon = $opts{existing_lexicon} || {};
+    my $used_phrase      = $opts{used_phrase} || {};
+    my $ignore_existing  = $opts{ignore_existing};
+
+    $phrase =~ s/([^\\]?)'/$1\\'/g;
+    $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
+    $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
+    $phrase =~ s/\\?\\'/'/g;
+    return if $used_phrase->{$phrase};
+    $used_phrase->{$phrase} = 1;
+
+    my $trans = '';
+    my ($qp, $qt) = qw( ' ' );
+    if ($phrase =~ /\\n/) {
+       $qp = '"';
+    }
+    if ($phrase =~ /[^\\]'/) {
+       $qp = '"';
+    }
+
+    my $reason;
+    if ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
+         warn "Found same phrase in core. skiped: $phrase" if $verbose;
+         if ( !$stealcore ) {
+             return;
+         }
+         $trans = $core_lexicon->{$phrase};
+         $reason = "From Core";
+    }
+    if ( !$trans && exists $existing_lexicon->{$phrase} ) {
+        return if $ignore_existing;
+        $trans = $existing_lexicon->{$phrase};
+        if ($trans =~ /\\n/) {
+            $qt = '"';
+        }
+        if ($trans =~ /[^\\]'/) {
+            $qt = '"';
+        }
+    }
+    else {
+        $reason = "New";
+    }
+
+    my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
+    $out .= " # Translate - $reason" if $reason;
+    $out;
 }
 
 sub component_targets {
