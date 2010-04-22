@@ -10,7 +10,7 @@ use vars qw( $MT_HOME );
 use vars qw(
     $verbose  $help       $component $output
     $language $translated $stealcore $format
-
+    $newonly
 );
 
 GetOptions(
@@ -22,6 +22,7 @@ GetOptions(
     'translated:s' => \$translated,
     'stealcore'    => \$stealcore,
     'format:s'     => \$format,
+    'newonly'      => \$newonly,
 );
 
 if ( $help ) {
@@ -43,7 +44,7 @@ die "Can't load MT" if $@;
 my $mt = MT->new;
 
 ## Default settings
-$format ||= q{ %s => '%s',};
+$format ||= q{ %s => %s,};
 
 my %mode_for_filetype = (
     pm   => 'perl',
@@ -154,8 +155,8 @@ sub run {
         my %phrase = $rule_for_mode{$mode}->($text) or next;
         my @phrases = keys %phrase;
         @phrases = sort { $a cmp $b } @phrases;
-        $target =~ s!$cwd/!!;
-        push @out, ( '', "## $target" );
+        my $target_rel = File::Spec->abs2rel($target, $cwd);
+        my @this_out;
         PHRASE: for my $phrase ( @phrases ) {
             $used_phrase{$phrase} = 1;
             my $trans = '';
@@ -175,6 +176,7 @@ sub run {
                  next PHRASE;
             }
             if ( exists $existing_lexicon->{$phrase} ) {
+                next PHRASE if $newonly;
                 $trans = $existing_lexicon->{$phrase};
                 if ($trans =~ /\\n/) {
                     $qt = '"';
@@ -185,13 +187,23 @@ sub run {
             }
             else {
                 $reason = "New";
+                $new++;
             }
+            $phrase =~ s/([^\\]?)'/$1\\'/g;
+            $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
+            $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
+            $phrase =~ s/\\?\\'/'/g;
+
             my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
             $out .= " # Translate - $reason" if $reason;
-            push @out, $out;
+            push @this_out, $out;
+        }
+        my $titled = 0;
+        if ( scalar @this_out ) {
+            push @out, ( '', "## $target_rel", @this_out );
         }
     }
-    my @unused_phrase = grep { !$used_phrase{$_} } keys %$existing_lexicon;
+    my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
     my $res = join "\n", @out;
     if ( $output ) {
         require MT::FileMgr;
@@ -201,7 +213,9 @@ sub run {
     else {
         print $res;
     }
-    printf STDERR "existing %i phrases are not used", scalar @unused_phrase;
+    printf STDERR "got %i new phrease to translate!\n", $new;
+    printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
+    print STDERR "UNUSED: $_\n" for @unused_phrases;
 }
 
 sub component_targets {
@@ -236,12 +250,13 @@ sub fetch_perl {
         while ($p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs) {
             $phrase .= ($1 || $2 || '');
         }
-        $phrase =~ s/([^\\]?)'/$1\\'/g;
-        $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
-        $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
-        $phrase =~ s/\\?\\'/'/g;
         $phrase{$phrase} = 1;
     }
+    while ($text =~ /\s*(?:["'])?label(?:["'])?\s*=>\s*(["'])(.*?)([^\\])\1/gs) { 
+        $phrase{$2.$3} = 1;
+
+    }
+
     return %phrase;
 }
 
@@ -288,9 +303,6 @@ sub fetch_mtml {
             $args{$1} = $3;
         }
         my $phrase = $args{phrase} or next;
-        $phrase =~ s/([^\\])'/$1\\'/g;
-        $phrase =~ s/^'/\\'/;
-        $phrase =~ s/\\"/"/g;
         $phrase{$phrase} = 1;
     }
     return %phrase;
