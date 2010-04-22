@@ -191,9 +191,17 @@ sub run {
             push @out, $out;
         }
     }
-    my %unused_phrase = grep { !$used_phrase{$_} } keys %$existing_lexicon;
-    print join "\n", @out;
-    printf STDERR "existing %i phrases are not used", scalar keys %unused_phrase;
+    my @unused_phrase = grep { !$used_phrase{$_} } keys %$existing_lexicon;
+    my $res = join "\n", @out;
+    if ( $output ) {
+        require MT::FileMgr;
+        my $fmgr = MT::FileMgr->new('Local');
+        $fmgr->put_data($res, $output, 'upload');
+    }
+    else {
+        print $res;
+    }
+    printf STDERR "existing %i phrases are not used", scalar @unused_phrase;
 }
 
 sub component_targets {
@@ -208,7 +216,13 @@ sub component_targets {
 sub target_files {
     my ($rootdir) = @_;
     my @files;
-    find(sub { push @files, $File::Find::name }, $rootdir);
+    my $files;
+    find(
+        sub {
+            push @files, $File::Find::name;
+            die 'Too many files. May be you run script in bad directory '
+                if 100000 < $files++;
+        }, $rootdir);
     @files = grep { $_ !~ /\.svn/ } @files;
     return @files;
 }
