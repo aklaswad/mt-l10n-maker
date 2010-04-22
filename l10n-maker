@@ -238,7 +238,6 @@ sub target_files {
     my ( $rootdirs, $ignore_path_hash ) = @_;
     my @files;
     my $files;
-use YAML;    print STDERR YAML::Dump $ignore_path_hash;
     find(
         sub {
             die 'Too many files. May be you run script in bad directory '
