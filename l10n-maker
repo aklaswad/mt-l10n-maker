@@ -24,7 +24,7 @@ GetOptions(
     'translated:s' => \$translated,
     'stealcore'    => \$stealcore,
     'format:s'     => \$format,
-    'newonly'      => \$newonly,
+    'newonly|n'    => \$newonly,
     'footprint!'   => \$footprint,
 );
 
@@ -70,10 +70,11 @@ sub run {
                     ;
     my %other_component_path;
     if ( $component ) {
+        require MT::Component;
         %other_component_path
             = map { $_->path => 1 }
               grep { $_->id ne $component }
-              values %MT::Components;
+              MT::Component->select;
     }
     my @targets = target_files( \@target_dirs, \%other_component_path );
     @targets = sort { $a cmp $b } @targets;
@@ -232,7 +233,7 @@ sub run {
     }
     printf STDERR "got %i new phrease to translate!\n", $new;
     printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
-    print STDERR "UNUSED: $_\n" for @unused_phrases;
+    if ( $verbose ) { print STDERR "UNUSED: $_\n" for @unused_phrases };
 }
 
 sub component_targets {
