@@ -331,6 +331,11 @@ sub fetch_config {
     my %target_key = (
         label => 1,
      );
+    if ( $text =~ m/^##TRANS_KEYS:\s*(.*)/ ) {
+        my $keys = $1;
+        %target_key = map { $_ => 1 } split /\s/, $keys;
+    }
+
     my %phrase;
     my $config = MT::Util::YAML::Load($text);
     my $explorer;
