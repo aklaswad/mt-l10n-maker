@@ -405,13 +405,42 @@ $ l10nmaker --component=core --output=ja.pm
 
 specify the component name to make translate file.
 
+=item * translated
 
-=item * output
+specify the l10n file that already exists
+
+=item * laguage
+
+langtag of target language of translating
+
+=item * stealcore ( optional )
+
+if it's true, and the phrase was found in MT's translate dictionary, include
+it to the new lexicon.
+
+=item * format ( optional )
+
+output format
+
+=item * newonly ( optional )
+
+output unknown phrases only
+
+=item * footprint ( optional: default is true )
+
+flag to print comment that says which file the phrases come from.
+
+=item * includeunused ( optional )
+
+output the phrases, that already translated phrases but can't find in the
+source codes, at the end of lexicon.
+
+=item * output ( optional )
 
 specify the output file to generate.
 if no output file was passed, script prints out the dictionary to STDOUT.
 
-=item * verbose
+=item * verbose ( optional )
 
 prints the details what this script is doing to STDERR.
 
