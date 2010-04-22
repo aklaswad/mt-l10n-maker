@@ -1,0 +1,333 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Cwd;
+use File::Spec;
+use File::Find;
+use Getopt::Long;
+use Pod::Usage;
+use vars qw( $MT_HOME );
+use vars qw(
+    $verbose  $help       $component $output
+    $language $translated $stealcore $format
+
+);
+
+GetOptions(
+    help           => \$help,
+    verbose        => \$verbose,
+    'component:s'  => \$component,
+    'output:s'     => \$output,
+    'language:s'   => \$language,
+    'translated:s' => \$translated,
+    'stealcore'    => \$stealcore,
+    'format:s'     => \$format,
+);
+
+if ( $help ) {
+    pod2usage({
+        -verbose => 2,
+        -exitval => 0,
+        -output  => \*STDERR,
+    });
+}
+
+## Initialize MT
+my $cwd = cwd();
+$MT_HOME = $ENV{MT_HOME} || $cwd;
+unshift @INC, File::Spec->catdir( $MT_HOME, 'lib' );
+unshift @INC, File::Spec->catdir( $MT_HOME, 'extlib' );
+
+require MT;
+die "Can't load MT" if $@;
+my $mt = MT->new;
+
+## Default settings
+$format ||= q{ %s => '%s',};
+
+my %mode_for_filetype = (
+    pm   => 'perl',
+    pl   => 'perl',
+    yaml => 'config',
+    tmpl => 'mtml',
+    mtml => 'mtml',
+);
+
+my %rule_for_mode = (
+    perl   => \&fetch_perl,
+    config => \&fetch_config,
+    mtml   => \&fetch_mtml,
+);
+
+sub run {
+    my @target_dirs = scalar @ARGV ? @ARGV
+                    : $component   ? component_targets($component)
+                    :                ($cwd)
+                    ;
+    my @targets = target_files(@target_dirs);
+    @targets = sort { $a cmp $b } @targets;
+
+    my $existing_lexicon = {};
+    my $core_lexicon;
+    if ( $translated ) {
+        require $translated;
+        $language = $translated;
+        $language =~ s!^lib/MT/L10N/!!;
+        $language =~ s!\.pm$!!;
+    }
+    else {
+        die "at lease one of translated file or language option are required\n"
+            unless $language;
+    }
+
+    {
+        no strict 'refs';
+        $core_lexicon = { %{'MT::L10N::' . $language . '::Lexicon'} };
+        warn "Use MT::L10N::$language for base lexicon" if $verbose;
+    }
+
+    if ( $translated ) {
+        $existing_lexicon = $core_lexicon;
+        $component = 'core';
+    }
+    elsif ( $component ) {
+        my $c = MT->component($component);
+        my $l10n_class = $c->l10n_class . "::$language";
+        eval "require $l10n_class";
+        if (!$@ ) {
+            no strict 'refs';
+            $existing_lexicon = { %{ $l10n_class . '::Lexicon' } };
+            warn "Use base lexicon from $l10n_class" if $verbose;
+        }
+        else {
+            warn "failed to loadd base lexicon from $l10n_class" if $verbose;
+        }
+    }
+    else {
+        my $l10n_file;
+        find(sub { $l10n_file = $File::Find::name if $File::Find::name =~ /L10N\/$language\.pm$/ }, $cwd );
+        if ( $l10n_file ) {
+            eval "require '$l10n_file'";
+            if ( !$@ ) {
+                $l10n_file =~ s/$cwd//;
+                my @l10n_path = File::Spec->splitdir($l10n_file);
+                while ( scalar @l10n_path && ! $l10n_path[0] ) { shift @l10n_path };
+                if ( $l10n_path[0] eq 'plugins' ) {
+                    # no need plugins/Foo/lib
+                    shift @l10n_path;
+                    shift @l10n_path;
+                    shift @l10n_path;
+                }
+                elsif ( $l10n_path[0] eq 'lib' ) {
+                    shift @l10n_path;
+                }
+                $l10n_path[-1] =~ s/\.pm$//;
+                my $l10n_class = join '::', @l10n_path;
+                eval "require $l10n_class";
+                if ( !$@ ) {
+                    no strict 'refs';
+                    $existing_lexicon = { %{ $l10n_class . '::Lexicon' } };
+                    warn "Use base lexicon from $l10n_class" if $verbose;
+                }
+                else {
+                    warn "Failed to load lexicon from $l10n_class: $@" if $verbose;
+                }
+            }
+            else {
+                warn "Failed to load $l10n_file: $@" if $verbose;
+            }
+        }
+        else {
+            warn "l10n file is not yet exists" if $verbose;
+        }
+    }
+
+    require MT::FileMgr;
+    my $fmgr = MT::FileMgr->new('Local');
+    my @out;
+    my ( $new );
+    my %used_phrase;
+    for my $target ( @targets ) {
+        my ($suffix) = $target =~ /\.(\w+)$/ or next;
+        my $mode = $mode_for_filetype{ $suffix } or next;
+        my $text = $fmgr->get_data($target, 'upload');
+        my %phrase = $rule_for_mode{$mode}->($text) or next;
+        my @phrases = keys %phrase;
+        @phrases = sort { $a cmp $b } @phrases;
+        $target =~ s!$cwd/!!;
+        push @out, ( '', "## $target" );
+        PHRASE: for my $phrase ( @phrases ) {
+            $used_phrase{$phrase} = 1;
+            my $trans = '';
+            my ($qp, $qt) = qw( ' ' );
+            if ($phrase =~ /\\n/) {
+               $qp = '"';
+            }
+            if ($phrase =~ /[^\\]'/) {
+               $qp = '"';
+            }
+
+            my $reason;
+            if ( exists $core_lexicon->{$phrase}
+                 && !$stealcore
+                 && $component ne 'core' ) {
+                 warn "Found same phrase in core. skiped: $phrase" if $verbose;
+                 next PHRASE;
+            }
+            if ( exists $existing_lexicon->{$phrase} ) {
+                $trans = $existing_lexicon->{$phrase};
+                if ($trans =~ /\\n/) {
+                    $qt = '"';
+                }
+                if ($trans =~ /[^\\]'/) {
+                    $qt = '"';
+                }
+            }
+            else {
+                $reason = "New";
+            }
+            my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
+            $out .= " # Translate - $reason" if $reason;
+            push @out, $out;
+        }
+    }
+    my %unused_phrase = grep { !$used_phrase{$_} } keys %$existing_lexicon;
+    print join "\n", @out;
+    printf STDERR "existing %i phrases are not used", scalar keys %unused_phrase;
+}
+
+sub component_targets {
+    my ($component_id) = @_;
+    my $component = MT->component($component_id);
+    return (
+        $component->path,
+        File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component->id ),
+    );
+}
+
+sub target_files {
+    my ($rootdir) = @_;
+    my @files;
+    find(sub { push @files, $File::Find::name }, $rootdir);
+    @files = grep { $_ !~ /\.svn/ } @files;
+    return @files;
+}
+
+sub fetch_perl {
+    my ($text) = @_;
+    my %phrase;
+    while ($text =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(((?:\s*(?:"(?:[^"\\]+|\\.)*"|'(?:[^'\\]+|\\.)*')\s*\.?\s*){1,})[,\)]/gs) {
+        my $p = $1;
+        my $phrase;
+        while ($p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs) {
+            $phrase .= ($1 || $2 || '');
+        }
+        $phrase =~ s/([^\\]?)'/$1\\'/g;
+        $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
+        $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
+        $phrase =~ s/\\?\\'/'/g;
+        $phrase{$phrase} = 1;
+    }
+    return %phrase;
+}
+
+sub fetch_config {
+    my ($text) = @_;
+    require MT::Util::YAML;
+    my %target_key = (
+        label => 1,
+     );
+    my %phrase;
+    my $config = MT::Util::YAML::Load($text);
+    my $explorer;
+    $explorer = sub {
+        my ( $key, $value ) = @_;
+        if ( !ref $value ) {
+            if ( $key && $target_key{$key} ) {
+                $phrase{$value} = 1;
+            }
+            elsif ( ( $value || '' ) =~ m/^\s*sub\s*\{/s ) {
+                %phrase = ( %phrase, fetch_perl($value) );
+            }
+        }
+        elsif ( 'HASH' eq ref $value ) {
+            for my $k ( keys %$value ) {
+                $explorer->($k, $value->{$k});
+            }
+        }
+        elsif ( 'ARRAY' eq ref $value ) {
+            for my $val ( @$value ) {
+                $explorer->(undef, $val);
+            }
+        }
+    };
+    $explorer->(undef, $config);
+    %phrase;
+}
+
+sub fetch_mtml {
+    my ($text) = @_;
+    my %phrase;
+    while ($text =~ m!(<(?:_|MT)_TRANS(?:\s+((?:\w+)\s*=\s*(["'])(?:<[^>]+?>|[^\3]+?)*?\3))+?\s*/?>)!igm) {
+        my($msg, %args) = ($1);
+        while ($msg =~ /\b(\w+)\s*=\s*(["'])((?:<[^>]+?>|[^\2])*?)?\2/g) {  #'
+            $args{$1} = $3;
+        }
+        my $phrase = $args{phrase} or next;
+        $phrase =~ s/([^\\])'/$1\\'/g;
+        $phrase =~ s/^'/\\'/;
+        $phrase =~ s/\\"/"/g;
+        $phrase{$phrase} = 1;
+    }
+    return %phrase;
+}
+
+## here we go!
+run();
+
+
+=pod
+
+=head1 NAME
+
+l10n-maker - Translate dictionary generator for Movable Type.
+
+=head1 DESCRIPTION
+
+this script generates and updates translate dictyonary from source codes of
+Movable Type and it's plugins.
+
+=head1 SYNOPSIS
+
+$ l10nmaker --component=core --output=ja.pm
+
+=head1 OPTIONS
+
+=over 4
+
+=item * component
+
+specify the component name to make translate file.
+
+
+=item * output
+
+specify the output file to generate.
+if no output file was passed, script prints out the dictionary to STDOUT.
+
+=item * verbose
+
+prints the details what this script is doing to STDERR.
+
+=item * help
+
+display this help.
+
+=back
+
+=head1 PREREQUEST
+
+cd (MT_HOME) or set MT_HOME evnironment variable to the absolute path
+of root directory of MT.
+
+=cut
