@@ -357,7 +357,7 @@ sub fetch_perl {
 
     }
 
-    return %phrase;
+    return ( %phrase, fetch_mtml($text) );
 }
 
 sub fetch_config {
@@ -383,6 +383,7 @@ sub fetch_config {
             elsif ( ( $value || '' ) =~ m/^\s*sub\s*\{/s ) {
                 %phrase = ( %phrase, fetch_perl($value) );
             }
+            %phrase = ( %phrase, fetch_mtml($value) );
         }
         elsif ( 'HASH' eq ref $value ) {
             for my $k ( keys %$value ) {
