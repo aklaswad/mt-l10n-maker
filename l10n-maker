@@ -208,7 +208,6 @@ sub run {
     }
     printf STDERR "got %i new phrease to translate!\n", $new;
     printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
-    if ( $verbose ) { print STDERR "UNUSED: $_\n" for @unused_phrases };
 }
 
 
@@ -299,7 +298,6 @@ sub component_targets {
     my $component = MT->component($component_id)
         or die "Failed to load component $component_id";
     my $path = $component->path;
-    print STDERR "path $path";
     if ( $component_id eq 'core' ) {
         my @dirs = qw( lib tmpl php search_templates default_templates );
         return map { File::Spec->catdir( $path, $_ ) } @dirs;
