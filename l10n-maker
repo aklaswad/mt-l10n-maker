@@ -290,9 +290,8 @@ sub make_line {
     my $used_phrase      = $opts{used_phrase} || {};
     my $ignore_existing  = $opts{ignore_existing};
 
+    ## escape non-escaped single quote.
     $phrase =~ s/([^\\]?)'/$1\\'/g;
-    $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
-    $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
     $phrase =~ s/\\?\\'/'/g;
     return if $used_phrase->{$phrase};
     $used_phrase->{$phrase} = 1;
@@ -377,6 +376,15 @@ sub fetch_perl {
         while ($p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs) {
             $phrase .= ($1 || $2 || '');
         }
+        ## merge multi lined string by concat.
+        ## for example:
+        ##     translate(
+        ##         'foo'
+        ##         . ' and bar' );
+        ## should be a single phrase 'foo and bar'.
+        $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
+        $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
+
         $phrase{$phrase} = 1;
     }
     while ($text =~ /\s*(?:["'])?label(?:["'])?\s*=>\s*(["'])(.*?)([^\\])\1/gs) { 
