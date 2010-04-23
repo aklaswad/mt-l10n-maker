@@ -84,11 +84,11 @@ sub run {
         printf STDERR "Search path: %s\n", $_ for @target_dirs;
     }
     my %other_component_path;
-    if ( $component ) {
+    if ( $component eq 'core' ) {
         require MT::Component;
         %other_component_path
             = map { $_->path => 1 }
-              grep { $_->id ne $component }
+              grep { $_->id ne lc $component }
               MT::Component->select;
     }
     my @targets = target_files( \@target_dirs, \%other_component_path );
@@ -124,7 +124,7 @@ sub run {
         $component = 'core';
     }
     elsif ( $component ) {
-        my $c = MT->component($component);
+        my $c = MT->component(lc $component);
         $l10n_class = $c->l10n_class . "::$language";
         eval "require $l10n_class";
         if (!$@ ) {
@@ -253,12 +253,12 @@ sub run {
 
 sub make_lexicon_from_file {
     my ( $filepath, %opts ) = @_;
+    warn "fetch phrases from $filepath" if $verbose;
     my $core_lexicon     = $opts{core_lexicon} || {};
     my $existing_lexicon = $opts{existing_lexicon} || {};
     my $used_phrase      = $opts{used_phrase} || {};
     my ($suffix) = $filepath =~ /\.(\w+)$/ or return;
     my $mode = $mode_for_filetype{ $suffix } or return;
-    warn "fetch phrases from $filepath" if $verbose;
 
     require MT::FileMgr;
     my $fmgr = MT::FileMgr->new('Local');
@@ -332,7 +332,7 @@ sub make_line {
 
 sub component_targets {
     my ($component_id) = @_;
-    my $component = MT->component($component_id)
+    my $component = MT->component(lc $component_id)
         or die "Failed to load component $component_id";
     my $path = $component->path;
     if ( $component_id eq 'core' ) {
@@ -340,9 +340,10 @@ sub component_targets {
         return map { File::Spec->catdir( $path, $_ ) } @dirs;
     }
     else {
+        my $static = File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component_id );
         return (
             $path,
-            File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component->id ),
+            ( -d $static ? ( $static ) : () ),
         );
     }
 }
@@ -360,9 +361,10 @@ sub target_files {
                 return if $name =~ /$key/;
             }
             return if $name =~ /L10N\/\w*\.pm/;
+            return if $name =~ /\.svn/;
+            return if $name =~ /\.git/;
             push @files, $name;
         }, @$rootdirs);
-    @files = grep { $_ !~ /\.svn/ } @files;
     return @files;
 }
 
@@ -401,7 +403,7 @@ sub fetch_config {
     require MT::Util::YAML;
     my %target_key = (
         label => 1,
-     );
+    );
     if ( $text =~ m/^##TRANS_KEYS:\s*(.*)/ ) {
         my $keys = $1;
         %target_key = map { $_ => 1 } split /\s/, $keys;
