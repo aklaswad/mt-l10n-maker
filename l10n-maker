@@ -9,26 +9,26 @@ use Pod::Usage;
 use Encode;
 use vars qw( $MT_HOME );
 use vars qw(
-    $verbose  $help       $component      $output
-    $language $translated $stealcore      $format
-    $newonly  $footprint  $include_unused $debug
+    $verbose   $help       $component       $output
+    $language  $translated $steal_from_core $format
+    $new_only  $footprint  $no_unused       $debug
 );
 
 $footprint = 1;
 
 GetOptions(
-    help           => \$help,
-    verbose        => \$verbose,
-    'component:s'  => \$component,
-    'output:s'     => \$output,
-    'language:s'   => \$language,
-    'translated:s' => \$translated,
-    'stealcore'    => \$stealcore,
-    'format:s'     => \$format,
-    'newonly|n'    => \$newonly,
-    'footprint!'   => \$footprint,
-    includeunused  => \$include_unused,
-    debug          => \$debug,
+    help                 => \$help,
+    verbose              => \$verbose,
+    'component:s'        => \$component,
+    'output:s'           => \$output,
+    'language:s'         => \$language,
+    'translated:s'       => \$translated,
+    'steal-from-core'    => \$steal_from_core,
+    'format:s'           => \$format,
+    'new-phrases-only|n' => \$new_only,
+    'footprint!'         => \$footprint,
+    'no-unused'          => \$no_unused,
+    debug                => \$debug,
 );
 
 if ( $help ) {
@@ -186,7 +186,7 @@ sub run {
     }
 
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
-    if ( scalar @unused_phrases && $include_unused ) {
+    if ( scalar @unused_phrases && !$no_unused ) {
         push @out, ( '' );
         push @out, "## Unused?";
         for my $phrase ( @unused_phrases ) {
@@ -234,7 +234,7 @@ sub make_lexicon_from_file {
                       core_lexicon     => $core_lexicon,
                       existing_lexicon => $existing_lexicon,
                       used_phrase      => $used_phrase,
-                      ignore_existing  => $newonly,
+                      ignore_existing  => $new_only,
                   );
         if ( $out ) {
             push @this_out, $out;
@@ -269,7 +269,7 @@ sub make_line {
     my $reason;
     if ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
          warn "Found same phrase in core. skiped: $phrase" if $verbose;
-         if ( !$stealcore ) {
+         if ( !$steal_from_core ) {
              return;
          }
          $trans = $core_lexicon->{$phrase};
@@ -436,16 +436,16 @@ specify the l10n file that already exists
 
 langtag of target language of translating
 
-=item * stealcore ( optional )
+=item * steal-from-core ( optional )
 
-if it's true, and the phrase was found in MT's translate dictionary, include
+if it's true, and the phrase was found in MT core translate dictionary, include
 it to the new lexicon.
 
 =item * format ( optional )
 
 output format
 
-=item * newonly ( optional )
+=item * new-phrases-only|n ( optional )
 
 output unknown phrases only
 
@@ -453,10 +453,10 @@ output unknown phrases only
 
 flag to print comment that says which file the phrases come from.
 
-=item * includeunused ( optional )
+=item * no-unused ( optional )
 
-output the phrases, that already translated phrases but can't find in the
-source codes, at the end of lexicon.
+by default, script outputs the phrases that already translated but can't find
+in the source codes, at the end of lexicon. if this option is enabled, stop that.
 
 =item * output ( optional )
 

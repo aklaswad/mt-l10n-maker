@@ -29,16 +29,16 @@ specify the l10n file that already exists
 
 langtag of target language of translating
 
-=item * stealcore ( optional )
+=item * steal-from-core ( optional )
 
-if it's true, and the phrase was found in MT's translate dictionary, include
+if it's true, and the phrase was found in MT core translate dictionary, include
 it to the new lexicon.
 
 =item * format ( optional )
 
 output format
 
-=item * newonly ( optional )
+=item * new-phrases-only|n ( optional )
 
 output unknown phrases only
 
@@ -46,10 +46,10 @@ output unknown phrases only
 
 flag to print comment that says which file the phrases come from.
 
-=item * includeunused ( optional )
+=item * no-unused ( optional )
 
-output the phrases, that already translated phrases but can't find in the
-source codes, at the end of lexicon.
+by default, script outputs the phrases that already translated but can't find
+in the source codes, at the end of lexicon. if this option is enabled, stop that.
 
 =item * output ( optional )
 
