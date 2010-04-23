@@ -55,6 +55,7 @@ my $mt = MT->new;
 
 ## Default settings
 $format ||= q{ %s => %s,};
+$component ||= '';
 
 my %mode_for_filetype = (
     cgi  => 'perl',
@@ -343,6 +344,7 @@ sub target_files {
 
 sub fetch_perl {
     my ($text) = @_;
+    return unless $text;
     my %phrase;
     while ($text =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(((?:\s*(?:"(?:[^"\\]+|\\.)*"|'(?:[^'\\]+|\\.)*')\s*\.?\s*){1,})[,\)]/gs) {
         my $p = $1;
@@ -362,6 +364,7 @@ sub fetch_perl {
 
 sub fetch_config {
     my ($text) = @_;
+    return unless $text;
     require MT::Util::YAML;
     my %target_key = (
         label => 1,
@@ -402,6 +405,7 @@ sub fetch_config {
 
 sub fetch_mtml {
     my ($text) = @_;
+    return unless $text;
     my %phrase;
     while ($text =~ m!(<(?:_|MT)_TRANS(?:\s+((?:\w+)\s*=\s*(["'])(?:<[^>]+?>|[^\3]+?)*?\3))+?\s*/?>)!igm) {
         my($msg, %args) = ($1);
