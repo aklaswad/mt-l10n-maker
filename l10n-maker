@@ -57,6 +57,7 @@ my $mt = MT->new;
 $format ||= q{ %s => %s,};
 
 my %mode_for_filetype = (
+    cgi  => 'perl',
     pm   => 'perl',
     pl   => 'perl',
     yaml => 'config',
@@ -88,6 +89,10 @@ sub run {
               MT::Component->select;
     }
     my @targets = target_files( \@target_dirs, \%other_component_path );
+    if ( $component eq 'core' ) {
+        push @targets, map { File::Spec->catfile( $cwd, $_ ) } <*.cgi>;
+    }
+
     @targets = sort { $a cmp $b } @targets;
 
     ## Get current lexicon.
