@@ -179,7 +179,7 @@ sub run {
         if ( scalar @this_out ) {
             my $target_rel = File::Spec->abs2rel($target, $cwd);
             $new += scalar grep { $_ =~ /Translate - New$/ } @this_out;
-            push @out, ( '' );
+            push @out, ( '' ) if $footprint;
             push @out, "## $target_rel" if $footprint;
             push @out, @this_out;
         }
@@ -451,7 +451,8 @@ output unknown phrases only
 
 =item * footprint ( optional: default is true )
 
-flag to print comment that says which file the phrases come from.
+flag to print comment that says which file the phrases come from. if you don't
+like it, --no-footprint to stop it.
 
 =item * no-unused ( optional )
 

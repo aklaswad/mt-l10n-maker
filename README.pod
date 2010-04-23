@@ -44,7 +44,8 @@ output unknown phrases only
 
 =item * footprint ( optional: default is true )
 
-flag to print comment that says which file the phrases come from.
+flag to print comment that says which file the phrases come from. if you don't
+like it, --no-footprint to stop it.
 
 =item * no-unused ( optional )
 
