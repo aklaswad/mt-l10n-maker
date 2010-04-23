@@ -12,6 +12,7 @@ use vars qw(
     $verbose   $help       $component       $output
     $language  $translated $steal_from_core $format
     $new_only  $footprint  $no_unused       $debug
+    $update
 );
 
 $footprint = 1;
@@ -29,6 +30,7 @@ GetOptions(
     'footprint!'         => \$footprint,
     'no-unused'          => \$no_unused,
     debug                => \$debug,
+    update               => \$update,
 );
 
 if ( $help ) {
@@ -98,6 +100,7 @@ sub run {
 
     ## Get current lexicon.
     my $existing_lexicon = {};
+    my $l10n_class;
     my $core_lexicon = {};
     if ( $translated ) {
         require $translated;
@@ -112,8 +115,8 @@ sub run {
 
     {
         no strict 'refs';
-        $core_lexicon = { %{'MT::L10N::' . $language . '::Lexicon'} };
-        warn "Use MT::L10N::$language for base lexicon" if $verbose;
+        $l10n_class = 'MT::L10N::' . $language;
+        $core_lexicon = { %{$l10n_class . '::Lexicon'} };
     }
 
     if ( $translated ) {
@@ -122,7 +125,7 @@ sub run {
     }
     elsif ( $component ) {
         my $c = MT->component($component);
-        my $l10n_class = $c->l10n_class . "::$language";
+        $l10n_class = $c->l10n_class . "::$language";
         eval "require $l10n_class";
         if (!$@ ) {
             no strict 'refs';
@@ -135,7 +138,13 @@ sub run {
     }
     else {
         my $l10n_file;
-        find(sub { $l10n_file = $File::Find::name if $File::Find::name =~ /L10N\/$language\.pm$/ }, $cwd );
+        find(
+            sub {
+                my $name = $File::Find::name;
+                if ( $name =~ /L10N\/$language\.pm$/ && $name !~ /\.svn/ ) {
+                    $l10n_file = $File::Find::name;
+                }
+            }, $cwd );
         if ( $l10n_file ) {
             eval "require '$l10n_file'";
             if ( !$@ ) {
@@ -152,7 +161,7 @@ sub run {
                     shift @l10n_path;
                 }
                 $l10n_path[-1] =~ s/\.pm$//;
-                my $l10n_class = join '::', @l10n_path;
+                $l10n_class = join '::', @l10n_path;
                 eval "require $l10n_class";
                 if ( !$@ ) {
                     no strict 'refs';
@@ -171,6 +180,10 @@ sub run {
             warn "l10n file is not yet exists" if $verbose;
         }
     }
+    if ( $update && !$l10n_class ) {
+        die "Cannot detect original l10n module to update.";
+    }
+
     for my $val ( values %$existing_lexicon ) {
         $val = Encode::decode_utf8($val) if !Encode::is_utf8($val);
     }
@@ -198,6 +211,7 @@ sub run {
     ## Make lines from unused phrases.
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
     if ( scalar @unused_phrases && !$no_unused ) {
+        @unused_phrases = sort { $a cmp $b } @unused_phrases;
         push @out, ( '' );
         push @out, "## Unused?";
         for my $phrase ( @unused_phrases ) {
@@ -211,10 +225,23 @@ sub run {
 
     ## Making output
     my $res = join "\n", @out;
+    if ( $update ) {
+        $l10n_class =~ s!::!/!g;
+        my $filepath = $INC{ $l10n_class . '.pm' };
+        print STDERR "Update l10n file $filepath.\n" if $verbose;
+        my $start = qr{\n\%Lexicon \= \(\n};
+        my $end   = qr{\n\)\;\n};
+        require MT::FileMgr;
+        my $fmgr = MT::FileMgr->new('Local');
+        my $text = $fmgr->get_data($filepath);
+        my (@reg) = $text =~ s{($start).*($end)}{$1$res$2}msx;
+        $res = $text;
+        $output = $filepath;
+    }
     if ( $output ) {
         require MT::FileMgr;
         my $fmgr = MT::FileMgr->new('Local');
-        $fmgr->put_data($res, $output, 'output');
+        $fmgr->put_data($res, $output, 'output') or die $fmgr->errstr;
     }
     else {
         print Encode::encode_utf8($res);
@@ -280,27 +307,25 @@ sub make_line {
     }
 
     my $reason;
-    if ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
-         warn "Found same phrase in core. skiped: $phrase" if $verbose;
+    if ( exists $existing_lexicon->{$phrase} ) {
+        return if $ignore_existing;
+        $trans = $existing_lexicon->{$phrase};
+    }
+    elsif ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
          if ( !$steal_from_core ) {
              return;
          }
          $trans = $core_lexicon->{$phrase};
          $reason = "From Core";
     }
-    if ( !$trans && exists $existing_lexicon->{$phrase} ) {
-        return if $ignore_existing;
-        $trans = $existing_lexicon->{$phrase};
-        if ($trans =~ /\\n/) {
-            $qt = '"';
-        }
-        if ($trans =~ /[^\\]'/) {
-            $qt = '"';
-        }
+    if ($trans =~ /\\n/) {
+        $qt = '"';
     }
-    else {
-        $reason = "New";
+    if ($trans =~ /[^\\]'/) {
+        $qt = '"';
     }
+    $reason = "New" if !$trans;
+
     my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
     $out .= " # Translate - $reason" if $reason;
     $out;
