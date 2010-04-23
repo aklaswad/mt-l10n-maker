@@ -71,6 +71,7 @@ my %rule_for_mode = (
 );
 
 sub run {
+    ## Making list of files who possibly has a line need to translate.
     my @target_dirs = scalar @ARGV ? @ARGV
                     : $component   ? component_targets($component)
                     :                ($cwd)
@@ -89,8 +90,9 @@ sub run {
     my @targets = target_files( \@target_dirs, \%other_component_path );
     @targets = sort { $a cmp $b } @targets;
 
+    ## Get current lexicon.
     my $existing_lexicon = {};
-    my $core_lexicon;
+    my $core_lexicon = {};
     if ( $translated ) {
         require $translated;
         $language = $translated;
@@ -166,6 +168,8 @@ sub run {
     for my $val ( values %$existing_lexicon ) {
         $val = Encode::decode_utf8($val) if !Encode::is_utf8($val);
     }
+
+    ## Fetch phrases from those files.
     my @out;
     my ( $new );
     my %used_phrase;
@@ -185,6 +189,7 @@ sub run {
         }
     }
 
+    ## Make lines from unused phrases.
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
     if ( scalar @unused_phrases && !$no_unused ) {
         push @out, ( '' );
@@ -197,6 +202,8 @@ sub run {
             push @out, $out if $out;
         }
     }
+
+    ## Making output
     my $res = join "\n", @out;
     if ( $output ) {
         require MT::FileMgr;
