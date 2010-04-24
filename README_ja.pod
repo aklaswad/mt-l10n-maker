@@ -1,0 +1,111 @@
+=pod
+
+=head1 NAME
+
+Movable Type 用翻訳辞書ファイル作成スクリプト
+
+=head1 DESCRIPTION
+
+このスクリプトは、Movable Type の本体やプラグインのソースコードを元に、翻訳
+が必要なフレーズを検索、抽出して、辞書ファイルのひな形の作成や更新を行います。
+
+=head1 SYNOPSIS
+
+$ l10nmaker --langeuae=LANGTAG [ options.. ] [ dir... ]
+
+=head1 OPTIONS
+
+=over 4
+
+=item * component
+
+翻訳を行う対象となるコンポーネント名を指定します。
+
+=item * translated
+
+既にL10Nファイルがある場合に指定します。このオプションは、過去のスクリプトとの
+互換性のために提供されています。通常は指定しないでください。
+
+=item * laguage
+
+作成する辞書ファイルの言語を言語タグ(en_us, ja, es 等)で指定します。
+
+=item * steal-from-core ( optional )
+
+MTのコアパッケージに含まれるフレーズがプラグインでも利用されていた場合、
+実行時には問題なく翻訳されるため、そのようなフレーズはプラグイン側の
+辞書に含めません。
+このsteal-from-coreオプションを有効にすると、そのようなフレーズについても辞書に
+含めるようにします。
+
+=item * format ( optional )
+
+出力する各行の書式を指定します。翻訳前のフレーズと、翻訳後のフレーズの二つの
+変数を「%s」で受け取るような、printf形式のフォーマットを指定してください。
+例: --format '\t%s\n\t\t=> %s,'
+
+=item * new-phrases-only ( optional )
+
+新しく発見されたフレーズのみを出力します。
+
+=item * footprint ( optional: default is true )
+
+デフォルトでは、各フレーズがどのファイルから抽出されたかというコメントが
+挿入されます。これを抑制したい場合に、--no-footprint を指定できます。
+
+=item * no-unused ( optional )
+
+スクリプトは既存の辞書に含まれていたフレーズのうち、今回の抽出では使用
+されなかったフレーズについても、作成する辞書ファイルの末尾に加えます。
+no-unusedオプションはこれを抑制します。
+
+=item * update ( optional )
+
+抽出の結果作成された辞書を、既存のL10Nファイルに直接上書きします。
+スクリプトはoutputオプション、updateオプション共に指定がない場合、標準出力に
+結果をプリントします。
+
+=item * output ( optional )
+
+出力を保存するファイル名を指定します。
+スクリプトはoutputオプション、updateオプション共に指定がない場合、標準出力に
+結果をプリントします。
+
+=item * verbose ( optional )
+
+スクリプトの動作の詳細を表示します。
+
+=item * help
+
+このヘルプメッセージを出力して終了します。
+
+=back
+
+=head1 HOW_TO_USE
+
+=head2 Building Core Dictionary
+
+MTのホームディレクトリに移動し、componentオプションにcoreを指定して実行します。
+
+    $ l10n-maker --language ja --component core
+
+=head2 Building Installed Plugin's Dictionary
+
+既にパッケージにインストールされているプラグインの辞書を作成する場合、MTの
+ホームディレクトリに移動し、componentオプションにそのプラグイン名を指定します。
+
+    $ l10n-maker --language ja --component StyleCatcher
+
+=head2 Building Stand Alone Plugin's Dictionary
+
+GitHubからダウンロードした直後のような、MTにインストールされていない状態の
+プラグインの辞書を作成する場合、環境変数「MT_HOME」に、実行可能なMTへのパスを設定し、
+プラグインのルートディレクトリでスクリプトを実行します。componentオプションは
+指定しません。
+
+    $ l10n-maker --language ja
+
+=back
+
+=cut
+
