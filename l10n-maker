@@ -456,7 +456,6 @@ sub fetch_mtml {
 ## here we go!
 run();
 
-
 =pod
 
 =head1 NAME
@@ -470,7 +469,7 @@ Movable Type and it's plugins.
 
 =head1 SYNOPSIS
 
-$ l10nmaker --component=core --output=ja.pm
+$ l10nmaker --langeuae=LANGTAG [ options.. ] [ dir... ]
 
 =head1 OPTIONS
 
@@ -497,7 +496,7 @@ it to the new lexicon.
 
 output format
 
-=item * new-phrases-only|n ( optional )
+=item * new-phrases-only ( optional )
 
 output unknown phrases only
 
@@ -510,6 +509,10 @@ like it, --no-footprint to stop it.
 
 by default, script outputs the phrases that already translated but can't find
 in the source codes, at the end of lexicon. if this option is enabled, stop that.
+
+=item * update ( optional )
+
+overwrite an existing L10N file by the new dictionary.
 
 =item * output ( optional )
 
@@ -526,9 +529,30 @@ display this help.
 
 =back
 
-=head1 PREREQUEST
+=head1 HOW_TO_USE
 
-cd (MT_HOME) or set MT_HOME evnironment variable to the absolute path
-of root directory of MT.
+=head2 Building Core Dictionary
+
+When you want to update MT's core L10N files, go to MT's Home directory, then
+run this script with component option set to 'core'.
+
+    $ l10n-maker --language ja --component core
+
+=head2 Building Installed Plugin's Dictionary
+
+When you want to update a plugin's L10N files that are already installed
+( as bundled StyleCatcher plugin ), go to MT's Home directory, then
+run this script with component option set to the Plugin name.
+
+    $ l10n-maker --language ja --component StyleCatcher
+
+=head2 Building Stand Alone Plugin's Dictionary
+
+When you want to update a stand alone plugin ( something like just cloned
+from GitHub ), at first, set an excutable MT's path to the environment
+variable 'MT_HOME', then go to the plugin's root directory and run l10n_maker.
+l10n-maker scans all files under the current directory.
+
+    $ l10n-maker --language ja
 
 =cut
