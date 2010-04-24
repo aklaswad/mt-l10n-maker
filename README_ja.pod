@@ -105,7 +105,5 @@ GitHubからダウンロードした直後のような、MTにインストール
 
     $ l10n-maker --language ja
 
-=back
-
 =cut
 
