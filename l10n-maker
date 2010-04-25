@@ -135,7 +135,7 @@ sub run {
             warn "Use base lexicon from $l10n_class" if $verbose;
         }
         else {
-            warn "failed to loadd base lexicon from $l10n_class" if $verbose;
+            die "failed to load base lexicon from $l10n_class";
         }
     }
     else {
@@ -148,6 +148,7 @@ sub run {
                 }
             }, $cwd );
         if ( $l10n_file ) {
+            ## FIXME: in this block, looks doing require for same module twice...
             eval "require '$l10n_file'";
             if ( !$@ ) {
                 $l10n_file =~ s/$cwd//;
@@ -171,11 +172,11 @@ sub run {
                     warn "Use base lexicon from $l10n_class" if $verbose;
                 }
                 else {
-                    warn "Failed to load lexicon from $l10n_class: $@" if $verbose;
+                    die "Failed to load lexicon from $l10n_class: $@";
                 }
             }
             else {
-                warn "Failed to load $l10n_file: $@" if $verbose;
+                die "Failed to load $l10n_file: $@";
             }
         }
         else {
