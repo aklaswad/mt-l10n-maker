@@ -12,10 +12,11 @@ use vars qw(
     $verbose   $help       $component       $output
     $language  $translated $steal_from_core $format
     $new_only  $footprint  $no_unused       $debug
-    $update
+    $update    $backup
 );
 
 $footprint = 1;
+$backup    = 1;
 
 GetOptions(
     help                 => \$help,
@@ -31,6 +32,7 @@ GetOptions(
     'no-unused'          => \$no_unused,
     debug                => \$debug,
     update               => \$update,
+    'backup!'            => \$backup,
 );
 
 if ( $help ) {
@@ -234,6 +236,12 @@ sub run {
         require MT::FileMgr;
         my $fmgr = MT::FileMgr->new('Local');
         my $text = $fmgr->get_data($filepath);
+        if ( $backup ) {
+            require MT::Util;
+            my $ts = MT::Util::epoch2ts(undef, time() );
+            my $bu_path = $filepath . '.' . $ts;
+            $fmgr->put_data($text, $bu_path, 'output') or die $fmgr->errstr;
+        }
         my (@reg) = $text =~ s{($start).*($end)}{$1$res$2}msx;
         $res = $text;
         $output = $filepath;
@@ -513,6 +521,11 @@ in the source codes, at the end of lexicon. if this option is enabled, stop that
 =item * update ( optional )
 
 overwrite an existing L10N file by the new dictionary.
+
+=item * backup ( optional: default is true )
+
+if update option is enabled, script make a backup file of orignail dictionary.
+you can use --no-backup option if you want to stop making back up.
 
 =item * output ( optional )
 

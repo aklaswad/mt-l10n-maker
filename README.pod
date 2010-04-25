@@ -56,6 +56,11 @@ in the source codes, at the end of lexicon. if this option is enabled, stop that
 
 overwrite an existing L10N file by the new dictionary.
 
+=item * backup ( optional: default is true )
+
+if update option is enabled, script make a backup file of orignail dictionary.
+you can use --no-backup option if you want to stop making back up.
+
 =item * output ( optional )
 
 specify the output file to generate.

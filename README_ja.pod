@@ -65,6 +65,11 @@ no-unusedオプションはこれを抑制します。
 スクリプトはoutputオプション、updateオプション共に指定がない場合、標準出力に
 結果をプリントします。
 
+=item * backup ( optional: default is true )
+
+updateオプションが有効な場合、スクリプトは自動的に元の辞書ファイルのバックアップを
+作成します。バックアップが不要な場合、--no-backupを指定します。
+
 =item * output ( optional )
 
 出力を保存するファイル名を指定します。
