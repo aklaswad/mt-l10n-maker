@@ -61,6 +61,13 @@ my $mt = MT->new;
 $format ||= q{ %s => %s,};
 $component ||= '';
 
+## Get Options from TRANS_RECIPE.yaml
+my $recipe;
+if ( -e 'TRANS_RECIPE.yaml' ) {
+    require MT::Util::YAML;
+    $recipe = MT::Util::YAML::LoadFile('TRANS_RECIPE.yaml');
+}
+
 my %mode_for_filetype = (
     cgi  => 'perl',
     pm   => 'perl',
@@ -273,7 +280,14 @@ sub make_lexicon_from_file {
     my $fmgr = MT::FileMgr->new('Local');
     my $text = $fmgr->get_data($filepath, 'upload');
     $text = Encode::decode_utf8($text);
-    my %phrase = $rule_for_mode{$mode}->($text) or return;
+    my %phrase = $rule_for_mode{$mode}->(
+        $text,
+        filepath         => $filepath,
+        core_lexicon     => $core_lexicon,
+        existing_lexicon => $existing_lexicon,
+        used_phrase      => $used_phrase,
+        ignore_existing  => $new_only,
+    ) or return;
     my @phrases = keys %phrase;
     @phrases = sort { $a cmp $b } @phrases;
     my @this_out;
@@ -372,6 +386,7 @@ sub target_files {
             return if $name =~ /L10N\/\w*\.pm/;
             return if $name =~ /\.svn/;
             return if $name =~ /\.git/;
+            return if $name =~ /TRANS_RECIPE/;
             push @files, $name;
         }, @$rootdirs);
     return @files;
@@ -407,7 +422,7 @@ sub fetch_perl {
 }
 
 sub fetch_config {
-    my ($text) = @_;
+    my ($text, %opts) = @_;
     return unless $text;
     require MT::Util::YAML;
     my %target_key = (
@@ -417,7 +432,13 @@ sub fetch_config {
         my $keys = $1;
         %target_key = map { $_ => 1 } split /\s/, $keys;
     }
-
+    if ( $opts{filepath} ) {
+        my ( undef, undef, $file ) = File::Spec->splitpath( $opts{filepath} );
+        if ( $recipe && $recipe->{files}->{$file} ) {
+             my $keys = $recipe->{files}->{$file}->{trans_keys};
+             %target_key = ( %target_key, map { $_ => 1 } @$keys );
+         }
+    }
     my %phrase;
     my $config = MT::Util::YAML::Load($text);
     my $explorer;
