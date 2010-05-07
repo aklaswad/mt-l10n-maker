@@ -312,20 +312,16 @@ sub make_line {
     my $existing_lexicon = $opts{existing_lexicon} || {};
     my $used_phrase      = $opts{used_phrase} || {};
     my $ignore_existing  = $opts{ignore_existing};
-
-    ## escape non-escaped single quote.
-    $phrase =~ s/([^\\]?)'/$1\\'/g;
-    $phrase =~ s/\\?\\'/'/g;
     return if $used_phrase->{$phrase};
     $used_phrase->{$phrase} = 1;
 
     my $trans = '';
     my ($qp, $qt) = qw( ' ' );
     if ($phrase =~ /\\n/) {
-       $qp = '"';
+        $qp = '"';
     }
-    if ($phrase =~ /[^\\]'/) {
-       $qp = '"';
+    if ($phrase =~ /[^\\]'/ && $phrase !~ /[^\\]"/) {
+        $qp = '"';
     }
 
     my $reason;
@@ -343,11 +339,15 @@ sub make_line {
     if ($trans =~ /\\n/) {
         $qt = '"';
     }
-    if ($trans =~ /[^\\]'/) {
+    if ($trans =~ /[^\\]'/ && $trans !~ /[^\\]"/) {
         $qt = '"';
     }
+
     $reason = "New" if !$trans;
 
+    ## Escape good for perl code.
+    $phrase =~ s/([^\\]?)'/$1\\'/g if $qp eq "'";
+    $phrase =~ s/([^\\]?)"/$1\\"/g if $qp eq '"';
     my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
     $out .= " # Translate - $reason" if $reason;
     $out;
