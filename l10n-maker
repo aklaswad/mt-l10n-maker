@@ -59,7 +59,7 @@ my $mt = MT->new;
 
 ## Default settings
 $format ||= q{ %s => %s,};
-$component ||= '';
+$component ||= 'core';
 
 ## Get Options from TRANS_RECIPE.yaml
 my $recipe;
@@ -75,12 +75,14 @@ my %mode_for_filetype = (
     yaml => 'config',
     tmpl => 'mtml',
     mtml => 'mtml',
+    js   => 'js',
 );
 
 my %rule_for_mode = (
     perl   => \&fetch_perl,
     config => \&fetch_config,
     mtml   => \&fetch_mtml,
+    js     => \&fetch_js,
 );
 
 sub run {
@@ -355,19 +357,20 @@ sub make_line {
 
 sub component_targets {
     my ($component_id) = @_;
-    my $component = MT->component(lc $component_id)
+    my $component = MT->component( lc $component_id )
         or die "Failed to load component $component_id";
     my $path = $component->path;
     if ( $component_id eq 'core' ) {
-        my @dirs = qw( lib tmpl php search_templates default_templates );
+        my @dirs = qw(
+            lib       tmpl       php                search_templates
+            default_templates    mt-static/jquery   mt-static/js
+        );
         return map { File::Spec->catdir( $path, $_ ) } @dirs;
     }
     else {
-        my $static = File::Spec->catdir( MT->config->StaticFilePath, 'plugins', $component_id );
-        return (
-            $path,
-            ( -d $static ? ( $static ) : () ),
-        );
+        my $static = File::Spec->catdir( MT->config->StaticFilePath,
+            'plugins', $component_id );
+        return ( $path, ( -d $static ? ($static) : () ), );
     }
 }
 
@@ -479,6 +482,16 @@ sub fetch_mtml {
         }
         my $phrase = $args{phrase} or next;
         $phrase{$phrase} = 1;
+    }
+    return %phrase;
+}
+
+sub fetch_js {
+    my ($text) = @_;
+    return unless $text;
+    my %phrase;
+    while ($text =~ m!(?:trans|raise)\s*\(\s*(?:"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)')!igm) {
+        $phrase{ $1 || $2 } = 1;
     }
     return %phrase;
 }
