@@ -35,19 +35,20 @@ GetOptions(
     'backup!'            => \$backup,
 );
 
-if ( $help ) {
-    pod2usage({
-        -verbose => 2,
-        -exitval => 0,
-        -output  => \*STDERR,
-    });
+if ($help) {
+    pod2usage(
+        {   -verbose => 2,
+            -exitval => 0,
+            -output  => \*STDERR,
+        }
+    );
 }
 
 ## Initialize MT
 my $cwd = cwd();
 $MT_HOME = $ENV{MT_HOME} ||= $cwd;
 
-print STDERR "    CWD: $cwd\n" if $debug;
+print STDERR "    CWD: $cwd\n"     if $debug;
 print STDERR "MT_HOME: $MT_HOME\n" if $debug;
 
 unshift @INC, File::Spec->catdir( $MT_HOME, 'lib' );
@@ -58,7 +59,7 @@ die "Can't load MT" if $@;
 my $mt = MT->new;
 
 ## Default settings
-$format ||= q{ %s => %s,};
+$format    ||= q{ %s => %s,};
 $component ||= 'core';
 
 ## Get Options from TRANS_RECIPE.yaml
@@ -87,20 +88,18 @@ my %rule_for_mode = (
 
 sub run {
     ## Making list of files who possibly has a line need to translate.
-    my @target_dirs = scalar @ARGV ? @ARGV
-                    : $component   ? component_targets($component)
-                    :                ($cwd)
-                    ;
-    if ( $debug ) {
+    my @target_dirs
+        = scalar @ARGV ? @ARGV
+        : $component   ? component_targets($component)
+        :                ($cwd);
+    if ($debug) {
         printf STDERR "Search path: %s\n", $_ for @target_dirs;
     }
     my %other_component_path;
     if ( $component eq 'core' ) {
         require MT::Component;
-        %other_component_path
-            = map { $_->path => 1 }
-              grep { $_->id ne lc $component }
-              MT::Component->select;
+        %other_component_path = map { $_->path => 1 }
+            grep { $_->id ne lc $component } MT::Component->select;
     }
     my @targets = target_files( \@target_dirs, \%other_component_path );
     if ( $component eq 'core' ) {
@@ -113,32 +112,33 @@ sub run {
     my $existing_lexicon = {};
     my $l10n_class;
     my $core_lexicon = {};
-    if ( $translated ) {
+    if ($translated) {
         require $translated;
         $language = $translated;
         $language =~ s!^lib/MT/L10N/!!;
         $language =~ s!\.pm$!!;
     }
     else {
-        die "at lease one of translated file or language option are required\n"
+        die
+            "at lease one of translated file or language option are required\n"
             unless $language;
     }
 
     {
         no strict 'refs';
-        $l10n_class = 'MT::L10N::' . $language;
-        $core_lexicon = { %{$l10n_class . '::Lexicon'} };
+        $l10n_class   = 'MT::L10N::' . $language;
+        $core_lexicon = { %{ $l10n_class . '::Lexicon' } };
     }
 
-    if ( $translated ) {
+    if ($translated) {
         $existing_lexicon = $core_lexicon;
-        $component = 'core';
+        $component        = 'core';
     }
-    elsif ( $component ) {
-        my $c = MT->component(lc $component);
+    elsif ($component) {
+        my $c = MT->component( lc $component );
         $l10n_class = $c->l10n_class . "::$language";
         eval "require $l10n_class";
-        if (!$@ ) {
+        if ( !$@ ) {
             no strict 'refs';
             $existing_lexicon = { %{ $l10n_class . '::Lexicon' } };
             warn "Use base lexicon from $l10n_class" if $verbose;
@@ -155,15 +155,20 @@ sub run {
                 if ( $name =~ /L10N\/$language\.pm$/ && $name !~ /\.svn/ ) {
                     $l10n_file = $File::Find::name;
                 }
-            }, $cwd );
-        if ( $l10n_file ) {
+            },
+            $cwd
+        );
+        if ($l10n_file) {
             ## FIXME: in this block, looks doing require for same module twice...
             eval "require '$l10n_file'";
             if ( !$@ ) {
                 $l10n_file =~ s/$cwd//;
                 my @l10n_path = File::Spec->splitdir($l10n_file);
-                while ( scalar @l10n_path && ! $l10n_path[0] ) { shift @l10n_path };
+                while ( scalar @l10n_path && !$l10n_path[0] ) {
+                    shift @l10n_path;
+                }
                 if ( $l10n_path[0] eq 'plugins' ) {
+
                     # no need plugins/Foo/lib
                     shift @l10n_path;
                     shift @l10n_path;
@@ -202,19 +207,19 @@ sub run {
 
     ## Fetch phrases from those files.
     my @out;
-    my ( $new );
+    my ($new);
     my %used_phrase;
-    for my $target ( @targets ) {
+    for my $target (@targets) {
         my @this_out = make_lexicon_from_file(
-                          $target,
-                          core_lexicon     => $core_lexicon,
-                          existing_lexicon => $existing_lexicon,
-                          used_phrase      => \%used_phrase,
-                       );
+            $target,
+            core_lexicon     => $core_lexicon,
+            existing_lexicon => $existing_lexicon,
+            used_phrase      => \%used_phrase,
+        );
         if ( scalar @this_out ) {
-            my $target_rel = File::Spec->abs2rel($target, $cwd);
+            my $target_rel = File::Spec->abs2rel( $target, $cwd );
             $new += scalar grep { $_ =~ /Translate - New$/ } @this_out;
-            push @out, ( '' ) if $footprint;
+            push @out, ('') if $footprint;
             push @out, "## $target_rel" if $footprint;
             push @out, @this_out;
         }
@@ -224,20 +229,21 @@ sub run {
     my @unused_phrases = grep { !$used_phrase{$_} } keys %$existing_lexicon;
     if ( scalar @unused_phrases && !$no_unused ) {
         @unused_phrases = sort { $a cmp $b } @unused_phrases;
-        push @out, ( '' );
+        push @out, ('');
         push @out, "## Unused?";
-        for my $phrase ( @unused_phrases ) {
+        for my $phrase (@unused_phrases) {
             my $out = make_line(
-                          $phrase,
-                          existing_lexicon => $existing_lexicon,
-                          ignore_existing  => 0 );
+                $phrase,
+                existing_lexicon => $existing_lexicon,
+                ignore_existing  => 0
+            );
             push @out, $out if $out;
         }
     }
 
     ## Making output
     my $res = join "\n", @out;
-    if ( $update ) {
+    if ($update) {
         $l10n_class =~ s!::!/!g;
         my $filepath = $INC{ $l10n_class . '.pm' };
         print STDERR "Update l10n file $filepath.\n" if $verbose;
@@ -246,41 +252,42 @@ sub run {
         require MT::FileMgr;
         my $fmgr = MT::FileMgr->new('Local');
         my $text = $fmgr->get_data($filepath);
-        if ( $backup ) {
+
+        if ($backup) {
             require MT::Util;
-            my $ts = MT::Util::epoch2ts(undef, time() );
+            my $ts = MT::Util::epoch2ts( undef, time() );
             my $bu_path = $filepath . '.' . $ts;
-            $fmgr->put_data($text, $bu_path, 'output') or die $fmgr->errstr;
+            $fmgr->put_data( $text, $bu_path, 'output' ) or die $fmgr->errstr;
         }
         my (@reg) = $text =~ s{($start).*($end)}{$1$res$2}msx;
-        $res = $text;
+        $res    = $text;
         $output = $filepath;
     }
-    if ( $output ) {
+    if ($output) {
         require MT::FileMgr;
         my $fmgr = MT::FileMgr->new('Local');
-        $fmgr->put_data($res, $output, 'output') or die $fmgr->errstr;
+        $fmgr->put_data( $res, $output, 'output' ) or die $fmgr->errstr;
     }
     else {
         print Encode::encode_utf8($res);
     }
     printf STDERR "got %i new phrease to translate!\n", $new;
-    printf STDERR "existing %i phrases are not used\n", scalar @unused_phrases;
+    printf STDERR "existing %i phrases are not used\n",
+        scalar @unused_phrases;
 }
-
 
 sub make_lexicon_from_file {
     my ( $filepath, %opts ) = @_;
     warn "fetch phrases from $filepath" if $verbose;
-    my $core_lexicon     = $opts{core_lexicon} || {};
+    my $core_lexicon     = $opts{core_lexicon}     || {};
     my $existing_lexicon = $opts{existing_lexicon} || {};
-    my $used_phrase      = $opts{used_phrase} || {};
+    my $used_phrase      = $opts{used_phrase}      || {};
     my ($suffix) = $filepath =~ /\.(\w+)$/ or return;
-    my $mode = $mode_for_filetype{ $suffix } or return;
+    my $mode = $mode_for_filetype{$suffix} or return;
 
     require MT::FileMgr;
     my $fmgr = MT::FileMgr->new('Local');
-    my $text = $fmgr->get_data($filepath, 'upload');
+    my $text = $fmgr->get_data( $filepath, 'upload' );
     $text = Encode::decode_utf8($text);
     my %phrase = $rule_for_mode{$mode}->(
         $text,
@@ -293,15 +300,16 @@ sub make_lexicon_from_file {
     my @phrases = keys %phrase;
     @phrases = sort { $a cmp $b } @phrases;
     my @this_out;
-    for my $phrase ( @phrases ) {
+
+    for my $phrase (@phrases) {
         my $out = make_line(
-                      $phrase,
-                      core_lexicon     => $core_lexicon,
-                      existing_lexicon => $existing_lexicon,
-                      used_phrase      => $used_phrase,
-                      ignore_existing  => $new_only,
-                  );
-        if ( $out ) {
+            $phrase,
+            core_lexicon     => $core_lexicon,
+            existing_lexicon => $existing_lexicon,
+            used_phrase      => $used_phrase,
+            ignore_existing  => $new_only,
+        );
+        if ($out) {
             push @this_out, $out;
         }
     }
@@ -309,21 +317,15 @@ sub make_lexicon_from_file {
 }
 
 my @quotes = (
-    [qw(  ' ' )],
-    [qw( q{ } )],
-    [qw( q! ! )],
-    [qw( q[ ] )],
-    [qw{ q( ) }],
-    [qw( q| | )],
-    [qw( q< > )],
-    [qw( q@ @ )],
+    [qw(  ' ' )], [qw( q{ } )], [qw( q! ! )], [qw( q[ ] )],
+    [qw{ q( ) }], [qw( q| | )], [qw( q< > )], [qw( q@ @ )],
 );
 
 sub _quote {
     my ($phrase) = @_;
     my ( $start, $end );
- QUOTES:
-    for my $q ( @quotes ) {
+QUOTES:
+    for my $q (@quotes) {
         my ( $s, $e ) = @$q;
         if ( $phrase !~ /$e/ ) {
             $start = $s;
@@ -338,9 +340,9 @@ sub _quote {
 
 sub make_line {
     my ( $phrase, %opts ) = @_;
-    my $core_lexicon     = $opts{core_lexicon} || {};
+    my $core_lexicon     = $opts{core_lexicon}     || {};
     my $existing_lexicon = $opts{existing_lexicon} || {};
-    my $used_phrase      = $opts{used_phrase} || {};
+    my $used_phrase      = $opts{used_phrase}      || {};
     my $ignore_existing  = $opts{ignore_existing};
     return if $used_phrase->{$phrase};
     $used_phrase->{$phrase} = 1;
@@ -352,11 +354,11 @@ sub make_line {
         $trans = $existing_lexicon->{$phrase};
     }
     elsif ( exists $core_lexicon->{$phrase} && $component ne 'core' ) {
-         if ( !$steal_from_core ) {
-             return;
-         }
-         $trans = $core_lexicon->{$phrase};
-         $reason = "From Core";
+        if ( !$steal_from_core ) {
+            return;
+        }
+        $trans  = $core_lexicon->{$phrase};
+        $reason = "From Core";
     }
 
     $reason = "New" if !$trans;
@@ -404,7 +406,9 @@ sub target_files {
             return if $name =~ /\.git/;
             return if $name =~ /TRANS_RECIPE/;
             push @files, $name;
-        }, @$rootdirs);
+        },
+        @$rootdirs
+    );
     return @files;
 }
 
@@ -412,11 +416,14 @@ sub fetch_perl {
     my ($text) = @_;
     return unless $text;
     my %phrase;
-    while ($text =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(((?:\s*(?:"(?:[^"\\]+|\\.)*"|'(?:[^'\\]+|\\.)*')\s*\.?\s*){1,})[,\)]/gs) {
+    while ( $text
+        =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(((?:\s*(?:"(?:[^"\\]+|\\.)*"|'(?:[^'\\]+|\\.)*')\s*\.?\s*){1,})[,\)]/gs
+        )
+    {
         my $p = $1;
         my $phrase;
-        while ($p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs) {
-            $phrase .= ($1 || $2 || '');
+        while ( $p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs ) {
+            $phrase .= ( $1 || $2 || '' );
         }
         ## merge multi lined string by concat.
         ## for example:
@@ -429,8 +436,10 @@ sub fetch_perl {
 
         $phrase{$phrase} = 1;
     }
-    while ($text =~ /\s*(?:["'])?label(?:["'])?\s*=>\s*(["'])(.*?)([^\\])\1/gs) { 
-        $phrase{$2.$3} = 1;
+    while (
+        $text =~ /\s*(?:["'])?label(?:["'])?\s*=>\s*(["'])(.*?)([^\\])\1/gs )
+    {
+        $phrase{ $2 . $3 } = 1;
 
     }
 
@@ -438,12 +447,10 @@ sub fetch_perl {
 }
 
 sub fetch_config {
-    my ($text, %opts) = @_;
+    my ( $text, %opts ) = @_;
     return unless $text;
     require MT::Util::YAML;
-    my %target_key = (
-        label => 1,
-    );
+    my %target_key = ( label => 1, );
     if ( $text =~ m/^##TRANS_KEYS:\s*(.*)/ ) {
         my $keys = $1;
         %target_key = map { $_ => 1 } split /\s/, $keys;
@@ -451,9 +458,9 @@ sub fetch_config {
     if ( $opts{filepath} ) {
         my ( undef, undef, $file ) = File::Spec->splitpath( $opts{filepath} );
         if ( $recipe && $recipe->{files}->{$file} ) {
-             my $keys = $recipe->{files}->{$file}->{trans_keys};
-             %target_key = ( %target_key, map { $_ => 1 } @$keys );
-         }
+            my $keys = $recipe->{files}->{$file}->{trans_keys};
+            %target_key = ( %target_key, map { $_ => 1 } @$keys );
+        }
     }
     my %phrase;
     my $config = MT::Util::YAML::Load($text);
@@ -471,16 +478,16 @@ sub fetch_config {
         }
         elsif ( 'HASH' eq ref $value ) {
             for my $k ( keys %$value ) {
-                $explorer->($k, $value->{$k});
+                $explorer->( $k, $value->{$k} );
             }
         }
         elsif ( 'ARRAY' eq ref $value ) {
-            for my $val ( @$value ) {
-                $explorer->(undef, $val);
+            for my $val (@$value) {
+                $explorer->( undef, $val );
             }
         }
     };
-    $explorer->(undef, $config);
+    $explorer->( undef, $config );
     %phrase;
 }
 
@@ -488,9 +495,13 @@ sub fetch_mtml {
     my ($text) = @_;
     return unless $text;
     my %phrase;
-    while ($text =~ m!(<(?:_|MT)_TRANS(?:\s+((?:\w+)\s*=\s*(["'])(?:<[^>]+?>|[^\3]+?)*?\3))+?\s*/?>)!igm) {
-        my($msg, %args) = ($1);
-        while ($msg =~ /\b(\w+)\s*=\s*(["'])((?:<[^>]+?>|[^\2])*?)?\2/g) {  #'
+    while ( $text
+        =~ m!(<(?:_|MT)_TRANS(?:\s+((?:\w+)\s*=\s*(["'])(?:<[^>]+?>|[^\3]+?)*?\3))+?\s*/?>)!igm
+        )
+    {
+        my ( $msg, %args ) = ($1);
+        while ( $msg =~ /\b(\w+)\s*=\s*(["'])((?:<[^>]+?>|[^\2])*?)?\2/g )
+        {    #'
             $args{$1} = $3;
         }
         my $phrase = $args{phrase} or next;
@@ -503,7 +514,10 @@ sub fetch_js {
     my ($text) = @_;
     return unless $text;
     my %phrase;
-    while ($text =~ m!(?:trans|raise)\s*\(\s*(?:"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)')!igm) {
+    while ( $text
+        =~ m!(?:trans|raise)\s*\(\s*(?:"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)')!igm
+        )
+    {
         $phrase{ $1 || $2 } = 1;
     }
     return %phrase;
