@@ -308,6 +308,34 @@ sub make_lexicon_from_file {
     @this_out;
 }
 
+my @quotes = (
+    [qw(  ' ' )],
+    [qw( q{ } )],
+    [qw( q! ! )],
+    [qw( q[ ] )],
+    [qw{ q( ) }],
+    [qw( q| | )],
+    [qw( q< > )],
+    [qw( q@ @ )],
+);
+
+sub _quote {
+    my ($phrase) = @_;
+    my ( $start, $end );
+ QUOTES:
+    for my $q ( @quotes ) {
+        my ( $s, $e ) = @$q;
+        if ( $phrase !~ /$e/ ) {
+            $start = $s;
+            $end   = $e;
+            last QUOTES;
+        }
+    }
+    die qq{Failed to find good quote syntax for $phrase\n}
+        unless defined $end;
+    $phrase;
+}
+
 sub make_line {
     my ( $phrase, %opts ) = @_;
     my $core_lexicon     = $opts{core_lexicon} || {};
@@ -318,14 +346,6 @@ sub make_line {
     $used_phrase->{$phrase} = 1;
 
     my $trans = '';
-    my ($qp, $qt) = qw( ' ' );
-    if ($phrase =~ /\\n/) {
-        $qp = '"';
-    }
-    if ($phrase =~ /[^\\]'/ && $phrase !~ /[^\\]"/) {
-        $qp = '"';
-    }
-
     my $reason;
     if ( exists $existing_lexicon->{$phrase} ) {
         return if $ignore_existing;
@@ -338,19 +358,12 @@ sub make_line {
          $trans = $core_lexicon->{$phrase};
          $reason = "From Core";
     }
-    if ($trans =~ /\\n/) {
-        $qt = '"';
-    }
-    if ($trans =~ /[^\\]'/ && $trans !~ /[^\\]"/) {
-        $qt = '"';
-    }
 
     $reason = "New" if !$trans;
-
+    $phrase = _quote($phrase);
+    $trans  = _quote($trans);
     ## Escape good for perl code.
-    $phrase =~ s/([^\\]?)'/$1\\'/g if $qp eq "'";
-    $phrase =~ s/([^\\]?)"/$1\\"/g if $qp eq '"';
-    my $out = sprintf $format, "$qp$phrase$qp", "$qt$trans$qt";
+    my $out = sprintf $format, $phrase, $trans;
     $out .= " # Translate - $reason" if $reason;
     $out;
 }
