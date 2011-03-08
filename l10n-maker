@@ -335,7 +335,7 @@ QUOTES:
     }
     die qq{Failed to find good quote syntax for $phrase\n}
         unless defined $end;
-    $phrase;
+    return $start . $phrase . $end;
 }
 
 sub make_line {
@@ -417,23 +417,31 @@ sub fetch_perl {
     return unless $text;
     my %phrase;
     while ( $text
-        =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(((?:\s*(?:"(?:[^"\\]+|\\.)*"|'(?:[^'\\]+|\\.)*')\s*\.?\s*){1,})[,\)]/gs
+        =~ /(?:translate|errtrans|trans_error|trans|translate_escape|maketext)\s*\(
+            (
+                (?:\s*
+                    (?:
+                             \" (?: \\\\ | \\\" | [^\"] )* \"
+                        |    \' (?: \\\\ | \\\' | [^\'] )* \'
+                        | q?q\@ (?: \\\\ | \\\@ | [^\@] )* \@
+                        | q?q\! (?: \\\\ | \\\! | [^\!] )* \!
+                        | q?q\{ (?: \\\\ | \\\} | [^\}] )* \}
+                        | q?q\( (?: \\\\ | \\\) | [^\)] )* \)
+                        | q?q\[ (?: \\\\ | \\\] | [^\]] )* \]
+                    )
+                    \s*\.?\s*    # concat
+                ){1,}
+            )
+            [,\)]/gsx
         )
     {
-        my $p = $1;
-        my $phrase;
-        while ( $p =~ /"((?:[^"\\]+|\\.)*)"|'((?:[^'\\]+|\\.)*)'/gs ) {
-            $phrase .= ( $1 || $2 || '' );
+        my $the_arg = $1;
+        my $phrase = eval "$the_arg";
+        if ( $@ ) {
+            warn "Failed to fetch arg '$the_arg'\n" if $verbose;
+            next;
         }
-        ## merge multi lined string by concat.
-        ## for example:
-        ##     translate(
-        ##         'foo'
-        ##         . ' and bar' );
-        ## should be a single phrase 'foo and bar'.
-        $phrase =~ s/['"]\s*.\s*\n\s*['"]//gs;
-        $phrase =~ s/['"]\s*\n\s*.\s*['"]//gs;
-
+        next if $the_arg =~ /^\s*$/;
         $phrase{$phrase} = 1;
     }
     while (
