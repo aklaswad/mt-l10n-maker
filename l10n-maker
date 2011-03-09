@@ -59,7 +59,7 @@ die "Can't load MT" if $@;
 my $mt = MT->new;
 
 ## Default settings
-$format    ||= q{ %s => %s,};
+$format    ||= qq{\t%s => %s,};
 $component ||= 'core';
 
 ## Get Options from TRANS_RECIPE.yaml
